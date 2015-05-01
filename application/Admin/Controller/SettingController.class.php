@@ -3,23 +3,22 @@ namespace Admin\Controller;
 use Common\Controller\AdminbaseController;
 class SettingController extends AdminbaseController{
 	
-	
-	protected $options_obj;
+	protected $options_model;
 	
 	function _initialize() {
 		parent::_initialize();
-		$this->options_obj = D("Common/Options");
+		$this->options_model = D("Common/Options");
 	}
 	
 	function site(){
-		$option=$this->options_obj->where("option_name='site_options'")->find();
-		$cmf_settings=$this->options_obj->where("option_name='cmf_settings'")->getField("option_value");
-		$tpls=scandir(C("SP_TMPL_PATH"));
+		$option=$this->options_model->where("option_name='site_options'")->find();
+		$cmf_settings=$this->options_model->where("option_name='cmf_settings'")->getField("option_value");
+		$tpls=sp_scan_dir(C("SP_TMPL_PATH")."*",GLOB_ONLYDIR);
 		$noneed=array(".","..",".svn");
 		$tpls=array_diff($tpls, $noneed);
 		$this->assign("templates",$tpls);
 		
-		$adminstyles=scandir(SPSTATIC."simpleboot/themes");
+		$adminstyles=sp_scan_dir(SPSTATIC."simpleboot/themes/*",GLOB_ONLYDIR);
 		$adminstyles=array_diff($adminstyles, $noneed);
 		$this->assign("adminstyles",$adminstyles);
 		if($option){
@@ -46,31 +45,26 @@ class SettingController extends AdminbaseController{
 			$configs["URL_HTML_SUFFIX"]=$_POST['options']['html_suffix'];
 			$configs["UCENTER_ENABLED"]=empty($_POST['options']['ucenter_enabled'])?0:1;
 			$configs["COMMENT_NEED_CHECK"]=empty($_POST['options']['comment_need_check'])?0:1;
+			$comment_time_interval=intval($_POST['options']['comment_time_interval']);
+			$configs["COMMENT_TIME_INTERVAL"]=$comment_time_interval;
+			$_POST['options']['comment_time_interval']=$comment_time_interval;
+			$configs["MOBILE_TPL_ENABLED"]=empty($_POST['options']['mobile_tpl_enabled'])?0:1;
+			$configs["HTML_CACHE_ON"]=empty($_POST['options']['html_cache_on'])?false:true;
 				
 			sp_set_dynamic_config($configs);//sae use same function
 				
 			$data['option_name']="site_options";
 			$data['option_value']=json_encode($_POST['options']);
-			if($this->options_obj->where("option_name='site_options'")->find()){
-				$r=$this->options_obj->where("option_name='site_options'")->save($data);
+			if($this->options_model->where("option_name='site_options'")->find()){
+				$r=$this->options_model->where("option_name='site_options'")->save($data);
 			}else{
-				$r=$this->options_obj->add($data);
+				$r=$this->options_model->add($data);
 			}
 			
-			$cmf_settings['option_name']="cmf_settings";
 			$banned_usernames=preg_replace("/[^0-9A-Za-z_\x{4e00}-\x{9fa5}-]/u", ",", $_POST['cmf_settings']['banned_usernames']);
 			$_POST['cmf_settings']['banned_usernames']=$banned_usernames;
-			$cmf_settings['option_value']=json_encode($_POST['cmf_settings']);
 
-			F("cmf_settings",null);
-			if($this->options_obj->where("option_name='cmf_settings'")->find()){
-				$this->options_obj->where("option_name='cmf_settings'")->save($cmf_settings);
-			}else{
-				$r=$this->options_obj->add($cmf_settings);
-			}
-			
-			
-			
+			sp_set_cmf_setting($_POST['cmf_settings']);
 			
 			if ($r!==false) {
 				$this->success("保存成功！");
@@ -80,7 +74,6 @@ class SettingController extends AdminbaseController{
 			
 		}
 	}
-	
 	
 	function password(){
 		$this->display();

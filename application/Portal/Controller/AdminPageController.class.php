@@ -1,11 +1,18 @@
 <?php
+// +----------------------------------------------------------------------
+// | ThinkCMF [ WE CAN DO IT MORE SIMPLE ]
+// +----------------------------------------------------------------------
+// | Copyright (c) 2013-2014 http://www.thinkcmf.com All rights reserved.
+// +----------------------------------------------------------------------
+// | Author: Tuolaji <479923197@qq.com>
+// +----------------------------------------------------------------------
 namespace Portal\Controller;
 use Common\Controller\AdminbaseController;
 class AdminPageController extends AdminbaseController {
-	protected $posts_obj;
+	protected $posts_model;
 	function _initialize() {
 		parent::_initialize();
-		$this->posts_obj =D("Common/Posts");
+		$this->posts_model =D("Common/Posts");
 	}
 	function index(){
 		
@@ -45,10 +52,10 @@ class AdminPageController extends AdminbaseController {
 		
 		$where= join(" and ", $where_ands);
 		
-		$count=$this->posts_obj->where($where)->count();
+		$count=$this->posts_model->where($where)->count();
 		$page = $this->page($count, 20);
 		
-		$posts=$this->posts_obj->where($where)->limit($page->firstRow . ',' . $page->listRows)->select();
+		$posts=$this->posts_model->where($where)->limit($page->firstRow . ',' . $page->listRows)->select();
 		
 		$users_obj=M("Users");
 		$users_data=$users_obj->field("id,user_login")->where("user_status=1")->select();
@@ -101,10 +108,10 @@ class AdminPageController extends AdminbaseController {
 		
 		$where= join(" and ", $where_ands);
 		
-		$count=$this->posts_obj->where($where)->count();
+		$count=$this->posts_model->where($where)->count();
 		$page = $this->page($count, 20);
 		
-		$posts=$this->posts_obj->where($where)->limit($page->firstRow . ',' . $page->listRows)->select();
+		$posts=$this->posts_model->where($where)->limit($page->firstRow . ',' . $page->listRows)->select();
 		
 		$users_obj=M("Users");
 		$users_data=$users_obj->field("id,user_login")->where("user_status=1")->select();
@@ -128,9 +135,11 @@ class AdminPageController extends AdminbaseController {
 		if (IS_POST) {
 			$_POST['smeta']['thumb'] = sp_asset_relative_url($_POST['smeta']['thumb']);
 			$_POST['post']['post_date']=date("Y-m-d H:i:s",time());
-			$_POST['post']['smeta']=json_encode($_POST['smeta']);
 			$_POST['post']['post_author']=get_current_admin_id();
-			$result=$this->posts_obj->add($_POST['post']);
+			$page=I("post.post");
+			$page['smeta']=json_encode($_POST['smeta']);
+			$page['post_content']=htmlspecialchars_decode($page['post_content']);
+			$result=$this->posts_model->add($page);
 			if ($result) {
 				$this->success("添加成功！");
 			} else {
@@ -144,9 +153,9 @@ class AdminPageController extends AdminbaseController {
 		$term_id = intval(I("get.term")); 
 		$id= intval(I("get.id"));
 		$term=$terms_obj->where("term_id=$term_id")->find();
-		$post=$this->posts_obj->where("id=$id")->find();
+		$post=$this->posts_model->where("id=$id")->find();
 		$this->assign("post",$post);
-		$this->assign("smeta",(array)json_decode($post['smeta']));
+		$this->assign("smeta",json_decode($post['smeta'],true));
 			
 		$this->assign("author","1");
 		$this->assign("term",$term);
@@ -159,37 +168,25 @@ class AdminPageController extends AdminbaseController {
 		if (IS_POST) {
 			$_POST['smeta']['thumb'] = sp_asset_relative_url($_POST['smeta']['thumb']);
 			
-			$_POST['post']['smeta']=json_encode($_POST['smeta']);
 			unset($_POST['post']['post_author']);
-			$result=$this->posts_obj->save($_POST['post']);
+			$page=I("post.post");
+			$page['smeta']=json_encode($_POST['smeta']);
+			$page['post_content']=htmlspecialchars_decode($page['post_content']);
+			$result=$this->posts_model->save($page);
 			if ($result !== false) {
 				//
 				$this->success("保存成功！");
-				//$this->success(json_encode($_POST['meta']));
 			} else {
 				$this->error("保存失败！");
 			}
 		}
 	}
 	
-	//排序
-	public function listorders() {
-		$status = parent::_listorders($this->terms_relationship);
-		if ($status) {
-			$this->success("排序更新成功！");
-		} else {
-			$this->error("排序更新失败！");
-		}
-	}
-	
-	
 	function delete(){
-		
-		
 		if(isset($_POST['ids'])){
 			$ids = implode(",", $_POST['ids']);
 			$data=array("post_status"=>"0");
-			if ($this->posts_obj->where("id in ($ids)")->save($data)) {
+			if ($this->posts_model->where("id in ($ids)")->save($data)) {
 				$this->success("删除成功！");
 			} else {
 				$this->error("删除失败！");
@@ -198,7 +195,7 @@ class AdminPageController extends AdminbaseController {
 			if(isset($_GET['id'])){
 				$id = intval(I("get.id"));
 				$data=array("id"=>$id,"post_status"=>"0");
-				if ($this->posts_obj->save($data)) {
+				if ($this->posts_model->save($data)) {
 					$this->success("删除成功！");
 				} else {
 					$this->error("删除失败！");
@@ -211,7 +208,7 @@ class AdminPageController extends AdminbaseController {
 		if(isset($_GET['id'])){
 			$id = intval(I("get.id"));
 			$data=array("id"=>$id,"post_status"=>"1");
-			if ($this->posts_obj->save($data)) {
+			if ($this->posts_model->save($data)) {
 				$this->success("还原成功！");
 			} else {
 				$this->error("还原失败！");
@@ -223,7 +220,7 @@ class AdminPageController extends AdminbaseController {
 		
 		if(isset($_POST['ids'])){
 			$ids = implode(",", $_POST['ids']);
-			if ($this->posts_obj->where("id in ($ids)")->delete()!==false) {
+			if ($this->posts_model->where("id in ($ids)")->delete()!==false) {
 				$this->success("删除成功！");
 			} else {
 				$this->error("删除失败！");
@@ -231,7 +228,7 @@ class AdminPageController extends AdminbaseController {
 		}
 		if(isset($_GET['id'])){
 			$id = intval(I("get.id"));
-			if ($this->posts_obj->delete($id)!==false) {
+			if ($this->posts_model->delete($id)!==false) {
 				$this->success("删除成功！");
 			} else {
 				$this->error("删除失败！");

@@ -1,5 +1,11 @@
 <?php
-
+// +----------------------------------------------------------------------
+// | ThinkCMF [ WE CAN DO IT MORE SIMPLE ]
+// +----------------------------------------------------------------------
+// | Copyright (c) 2013-2014 http://www.thinkcmf.com All rights reserved.
+// +----------------------------------------------------------------------
+// | Author: Tuolaji <479923197@qq.com>
+// +----------------------------------------------------------------------
 /**
  * 邮箱配置
  */
@@ -14,14 +20,15 @@ class MailerController extends AdminbaseController {
     
     //SMTP配置处理
     public function index_post() {
-    	$_POST = array_map('trim', $_POST);
+    	$_POST = array_map('trim', I('post.'));
     	if(in_array('', $_POST)) $this->error("不能留空！");
     	$configs['SP_MAIL_ADDRESS'] = $_POST['address'];
-    	
+    	$configs['SP_MAIL_SENDER'] = $_POST['sender'];
     	$configs['SP_MAIL_SMTP'] = $_POST['smtp'];
     	$configs['SP_MAIL_LOGINNAME'] = $_POST['loginname'];
     	$configs['SP_MAIL_PASSWORD'] = $_POST['password'];
     	$rst=sp_set_dynamic_config($configs);
+    	sp_clear_cache();
     	if ($rst) {
     		$this->success("保存成功！");
     	} else {
@@ -65,4 +72,3 @@ class MailerController extends AdminbaseController {
     }
 }
 
-?>

@@ -7,18 +7,18 @@ namespace Admin\Controller;
 use Common\Controller\AdminbaseController;
 class RbacController extends AdminbaseController {
 
-    protected $User, $Role, $Access, $Role_user;
+    protected $role_model, $auth_access_model;
 
     function _initialize() {
         parent::_initialize();
-        $this->Role = D("Common/Role");
+        $this->role_model = D("Common/Role");
     }
 
     /**
      * 角色管理，有add添加，edit编辑，delete删除
      */
     public function index() {
-        $data = $this->Role->order(array("listorder" => "asc", "id" => "desc"))->select();
+        $data = $this->role_model->order(array("listorder" => "asc", "id" => "desc"))->select();
         $this->assign("roles", $data);
         $this->display();
     }
@@ -35,15 +35,14 @@ class RbacController extends AdminbaseController {
      */
     public function roleadd_post() {
     	if (IS_POST) {
-    		if ($this->Role->create()) {
-    			if ($this->Role->add()!==false) {
-    				$this->assign("jumpUrl", U("Rbac/rolemanage"));
+    		if ($this->role_model->create()) {
+    			if ($this->role_model->add()!==false) {
     				$this->success("添加角色成功",U("rbac/index"));
     			} else {
     				$this->error("添加失败！");
     			}
     		} else {
-    			$this->error($this->Role->getError());
+    			$this->error($this->role_model->getError());
     		}
     	}
     }
@@ -52,16 +51,16 @@ class RbacController extends AdminbaseController {
      * 删除角色
      */
     public function roledelete() {
-    	$users_obj = D("Common/Users");
         $id = intval(I("get.id"));
         if ($id == 1) {
             $this->error("超级管理员角色不能被删除！");
         }
-        $count=$users_obj->where("role_id=$id")->count();
+        $role_user_model=M("RoleUser");
+        $count=$role_user_model->where("role_id=$id")->count();
         if($count){
         	$this->error("该角色已经有用户！");
         }else{
-        	$status = $this->Role->delete($id);
+        	$status = $this->role_model->delete($id);
         	if ($status!==false) {
         		$this->success("删除成功！", U('Rbac/index'));
         	} else {
@@ -82,7 +81,7 @@ class RbacController extends AdminbaseController {
         if ($id == 1) {
             $this->error("超级管理员角色不能被修改！");
         }
-        $data = $this->Role->where(array("id" => $id))->find();
+        $data = $this->role_model->where(array("id" => $id))->find();
         if (!$data) {
         	$this->error("该角色不存在！");
         }
@@ -102,15 +101,15 @@ class RbacController extends AdminbaseController {
     		$this->error("超级管理员角色不能被修改！");
     	}
     	if (IS_POST) {
-    		$data = $this->Role->create();
+    		$data = $this->role_model->create();
     		if ($data) {
-    			if ($this->Role->save($data)!==false) {
+    			if ($this->role_model->save($data)!==false) {
     				$this->success("修改成功！", U('Rbac/index'));
     			} else {
     				$this->error("修改失败！");
     			}
     		} else {
-    			$this->error($this->Role->getError());
+    			$this->error($this->role_model->getError());
     		}
     	}
     }
@@ -119,7 +118,7 @@ class RbacController extends AdminbaseController {
      * 角色授权
      */
     public function authorize() {
-        $this->Access = D("Common/Access");
+        $this->auth_access_model = D("Common/AuthAccess");
        //角色ID
         $roleid = intval(I("get.id"));
         if (!$roleid) {
@@ -131,10 +130,9 @@ class RbacController extends AdminbaseController {
         $menu->nbsp = '&nbsp;&nbsp;&nbsp;';
         $result = $this->initMenu();
         $newmenus=array();
-        $priv_data = $this->Access->where(array("role_id" => $roleid))->select(); //获取权限表数据
+        $priv_data=$this->auth_access_model->where(array("role_id"=>$roleid))->getField("rule_name",true);//获取权限表数据
         foreach ($result as $m){
         	$newmenus[$m['id']]=$m;
-        	
         }
         
         foreach ($result as $n => $t) {
@@ -157,71 +155,57 @@ class RbacController extends AdminbaseController {
      * 角色授权
      */
     public function authorize_post() {
-    	$this->Access = D("Common/Access");
+    	
     	if (IS_POST) {
     		$roleid = intval(I("post.roleid"));
     		if(!$roleid){
     			$this->error("需要授权的角色不存在！");
     		}
     		if (is_array($_POST['menuid']) && count($_POST['menuid'])>0) {
-    			//取得菜单数据
-    			$menuinfo = M("Menu")->select();
-    			foreach ($menuinfo as $_v) {
-    				$menu_info[$_v["id"]] = $_v;
-    			}
-    			C('TOKEN_ON', false);
-    			$addauthorize = array();
-    			//检测数据合法性
+    			$this->auth_access_model = D("Common/AuthAccess");
+    			$menu_model=M("Menu");
+    			$auth_rule_model=M("AuthRule");
+    			$this->auth_access_model->where(array("role_id"=>$roleid,'type'=>'admin_url'))->delete();
     			foreach ($_POST['menuid'] as $menuid) {
-    				$info = array();
-    				$info = $this->_get_menuinfo((int) $menuid, $menu_info);
-    				if($info == false){
-    					continue;
-    				}
-    				$info['role_id'] = $roleid;
-    				$data = $this->Access->create($info);
-    				if (!$data) {
-    					$this->error($this->Access->getError());
-    				} else {
-    					$addauthorize[] = $data;
+    				$menu=$menu_model->where(array("id"=>$menuid))->field("app,model,action")->find();
+    				if($menu){
+    					$app=$menu['app'];
+    					$model=$menu['model'];
+    					$action=$menu['action'];
+    					$name=strtolower("$app/$model/$action");
+    					$this->auth_access_model->add(array("role_id"=>$roleid,"rule_name"=>$name,'type'=>'admin_url'));
     				}
     			}
-    			C('TOKEN_ON', true);
-    			$this->Access->where("role_id=$roleid")->delete();
     
-    			if($this->Access->rbac_authorize($roleid,$addauthorize)){
-    				$this->success("授权成功！", U("Rbac/index"));
-    			}else{
-    				$this->error("授权失败！");
-    			}
+    			$this->success("授权成功！", U("Rbac/index"));
     		}else{
     			//当没有数据时，清除当前角色授权
-    			$this->Access->where(array("role_id" => $roleid))->delete();
+    			$this->auth_access_model->where(array("role_id" => $roleid))->delete();
     			$this->error("没有接收到数据，执行清除授权成功！");
     		}
     	}
     }
     /**
      *  检查指定菜单是否有权限
-     * @param array $data menu表中数组
+     * @param array $menu menu表中数组
      * @param int $roleid 需要检查的角色ID
      */
-    private function _is_checked($data, $roleid, $priv_data) {
+    private function _is_checked($menu, $roleid, $priv_data) {
     	
-    	$priv_arr = array('app', 'model', 'action');
-    	if ($data['app'] == '') {
+    	$app=$menu['app'];
+    	$model=$menu['model'];
+    	$action=$menu['action'];
+    	$name=strtolower("$app/$model/$action");
+    	if($priv_data){
+	    	if (in_array($name, $priv_data)) {
+	    		return true;
+	    	} else {
+	    		return false;
+	    	}
+    	}else{
     		return false;
     	}
-    	$mdata['role_id'] = $roleid;
-    	$mdata["g"] = $data['app'];
-    	$mdata["m"] = $data['model'];
-    	$mdata["a"] = $data['action'];
-    	$info = in_array($mdata, $priv_data);
-    	if ($info) {
-    		return true;
-    	} else {
-    		return false;
-    	}
+    	
     }
 
     /**
@@ -241,32 +225,11 @@ class RbacController extends AdminbaseController {
         		
     }
     
-    /**
-     * 获取菜单表信息
-     * @param int $menuid 菜单ID
-     * @param int $menu_info 菜单数据
-     */
-    private function _get_menuinfo($menuid, $menu_info) {
-        $info = $menu_info[$menuid];
-        if(!$info){
-            return false;
-        }
-        $return['g'] = $info['app'];
-        $return['m'] = $info['model'];
-        $return['a'] = $info['action'];
-        return $return;
-    }
     
     public function member(){
-    	$role_id=$_GET['id'];
-    	$users_obj = D("Common/Users");
-    	$join = C('DB_PREFIX').'role as b on a.role_id =b.id';
-    	$lists=$users_obj->alias("a")->join($join)->where("role_id=$role_id and a.user_status=1")->select();
-    	$this->assign("lists",$lists);
-    	$this->display();
+    	//TODO 添加角色成员管理
     	
     }
 
 }
 
-?>
